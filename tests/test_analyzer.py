@@ -1,7 +1,12 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from bisq_market_intelligence.analyzer import MarketAnalyzer
+import pytest
+
+from bisq_market_intelligence.analyzer import (
+    InvalidMarketStateError,
+    MarketAnalyzer,
+)
 from bisq_market_intelligence.models import Offer
 
 
@@ -78,3 +83,117 @@ def test_best_ask_returns_none_when_no_sell_offers():
     analyzer = MarketAnalyzer(offers)
 
     assert analyzer.best_ask() is None
+
+
+def test_mid_price_returns_average_of_best_bid_and_ask():
+    offers = [
+        make_offer("buy-1", "BUY", "99000", "0.10"),
+        make_offer("buy-2", "BUY", "99500", "0.25"),
+        make_offer("sell-1", "SELL", "100500", "0.10"),
+        make_offer("sell-2", "SELL", "100000", "0.30"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.mid_price() == Decimal("99750")
+
+
+def test_mid_price_returns_none_when_bid_is_missing():
+    offers = [
+        make_offer("sell-1", "SELL", "100000", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.mid_price() is None
+
+
+def test_mid_price_returns_none_when_ask_is_missing():
+    offers = [
+        make_offer("buy-1", "BUY", "99500", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.mid_price() is None
+
+
+def test_spread_returns_difference_between_best_ask_and_best_bid():
+    offers = [
+        make_offer("buy-1", "BUY", "99000", "0.10"),
+        make_offer("buy-2", "BUY", "99500", "0.25"),
+        make_offer("sell-1", "SELL", "100500", "0.10"),
+        make_offer("sell-2", "SELL", "100000", "0.30"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.spread() == Decimal("500")
+
+
+def test_spread_returns_none_when_bid_is_missing():
+    offers = [
+        make_offer("sell-1", "SELL", "100000", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.spread() is None
+
+
+def test_spread_returns_none_when_ask_is_missing():
+    offers = [
+        make_offer("buy-1", "BUY", "99500", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.spread() is None
+
+
+def test_spread_pct_returns_spread_as_percentage_of_mid_price():
+    offers = [
+        make_offer("buy-1", "BUY", "99500", "0.25"),
+        make_offer("sell-1", "SELL", "100000", "0.30"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.spread_pct() == (
+        Decimal("500") / Decimal("99750")
+    ) * 100
+
+
+def test_spread_pct_returns_none_when_bid_is_missing():
+    offers = [
+        make_offer("sell-1", "SELL", "100000", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.spread_pct() is None
+
+
+def test_spread_pct_returns_none_when_ask_is_missing():
+    offers = [
+        make_offer("buy-1", "BUY", "99500", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    assert analyzer.spread_pct() is None
+
+
+def test_spread_pct_raises_when_mid_price_is_zero():
+    offers = [
+        make_offer("buy-1", "BUY", "0", "0.10"),
+        make_offer("sell-1", "SELL", "0", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    with pytest.raises(
+        InvalidMarketStateError,
+        match="zero mid-price",
+    ):
+        analyzer.spread_pct()
