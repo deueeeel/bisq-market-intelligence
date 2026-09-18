@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from decimal import Decimal
 
 from bisq_market_intelligence.models import Offer
@@ -5,6 +6,16 @@ from bisq_market_intelligence.models import Offer
 
 class InvalidMarketStateError(ValueError):
     """Raised when market data represents an invalid market state."""
+
+
+@dataclass(frozen=True)
+class ExecutionResult:
+    requested_amount: Decimal
+    executed_amount: Decimal
+    fully_filled: bool
+    total_cost: Decimal
+    average_execution_price: Decimal | None
+    reference_price: Decimal | None
 
 
 class MarketAnalyzer:
@@ -81,3 +92,80 @@ class MarketAnalyzer:
             )
 
         return (spread / mid_price) * 100
+
+    def simulate_execution(
+        self,
+        amount: Decimal,
+        side: str,
+    ) -> ExecutionResult:
+        if amount <= 0:
+            raise ValueError("amount must be greater than zero")
+
+        if side not in {"BUY", "SELL"}:
+            raise ValueError("side must be 'BUY' or 'SELL'")
+
+        if side == "BUY":
+            reference_offer = self.best_ask()
+
+            execution_offers = sorted(
+                (
+                    offer
+                    for offer in self.offers
+                    if offer.direction == "SELL"
+                ),
+                key=lambda offer: (offer.price, offer.timestamp),
+            )
+        else:
+            reference_offer = self.best_bid()
+
+            execution_offers = sorted(
+                (
+                    offer
+                    for offer in self.offers
+                    if offer.direction == "BUY"
+                ),
+                key=lambda offer: (-offer.price, offer.timestamp),
+            )
+
+        reference_price = (
+            reference_offer.price
+            if reference_offer is not None
+            else None
+        )
+
+        remaining_amount = amount
+        executed_amount = Decimal("0")
+        total_cost = Decimal("0")
+
+        for offer in execution_offers:
+            if remaining_amount <= 0:
+                break
+
+            amount_to_execute = min(
+                remaining_amount,
+                offer.amount,
+            )
+
+            if amount_to_execute < offer.min_amount:
+                continue
+
+            executed_amount += amount_to_execute
+            total_cost += amount_to_execute * offer.price
+            remaining_amount -= amount_to_execute
+
+        fully_filled = executed_amount == amount
+
+        average_execution_price = (
+            total_cost / executed_amount
+            if executed_amount > 0
+            else None
+        )
+
+        return ExecutionResult(
+            requested_amount=amount,
+            executed_amount=executed_amount,
+            fully_filled=fully_filled,
+            total_cost=total_cost,
+            average_execution_price=average_execution_price,
+            reference_price=reference_price,
+        )
