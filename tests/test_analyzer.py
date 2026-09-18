@@ -313,4 +313,85 @@ def test_simulate_execution_skips_offer_below_its_own_min_amount():
     assert result.executed_amount == Decimal("0.03")
     assert result.average_execution_price == Decimal("100200")
 
+def test_buy_execution_calculates_slippage_and_price_impact():
+    offers = [
+        make_offer("ask-1", "SELL", "100", "0.10"),
+        make_offer("ask-2", "SELL", "101", "0.10"),
+    ]
 
+    analyzer = MarketAnalyzer(offers)
+    result = analyzer.simulate_execution(Decimal("0.20"), "BUY")
+
+    assert result.average_execution_price == Decimal("100.5")
+    assert result.reference_price == Decimal("100")
+    assert result.last_execution_price == Decimal("101")
+
+    assert result.slippage() == Decimal("0.5")
+    assert result.slippage_pct() == Decimal("0.5")
+
+    assert result.price_impact() == Decimal("1")
+    assert result.price_impact_pct() == Decimal("1")
+
+
+def test_sell_execution_calculates_slippage_and_price_impact():
+    offers = [
+        make_offer("bid-1", "BUY", "100", "0.10"),
+        make_offer("bid-2", "BUY", "99", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+    result = analyzer.simulate_execution(Decimal("0.20"), "SELL")
+
+    assert result.average_execution_price == Decimal("99.5")
+    assert result.reference_price == Decimal("100")
+    assert result.last_execution_price == Decimal("99")
+
+    assert result.slippage() == Decimal("0.5")
+    assert result.slippage_pct() == Decimal("0.5")
+
+    assert result.price_impact() == Decimal("1")
+    assert result.price_impact_pct() == Decimal("1")
+
+
+def test_partial_execution_calculates_slippage_and_price_impact():
+    offers = [
+        make_offer("ask-1", "SELL", "100", "0.10"),
+        make_offer("ask-2", "SELL", "101", "0.10"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+    result = analyzer.simulate_execution(Decimal("0.30"), "BUY")
+
+    assert result.executed_amount == Decimal("0.20")
+    assert result.fully_filled is False
+
+    assert result.average_execution_price == Decimal("100.5")
+    assert result.reference_price == Decimal("100")
+    assert result.last_execution_price == Decimal("101")
+
+    assert result.slippage() == Decimal("0.5")
+    assert result.slippage_pct() == Decimal("0.5")
+
+    assert result.price_impact() == Decimal("1")
+    assert result.price_impact_pct() == Decimal("1")
+
+
+def test_no_execution_returns_none_for_all_execution_metrics():
+    offers = [
+        make_offer("ask-1", "SELL", "100", "0.10", min_amount="0.05"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+    result = analyzer.simulate_execution(Decimal("0.02"), "BUY")
+
+    assert result.executed_amount == Decimal("0")
+    assert result.fully_filled is False
+
+    assert result.reference_price == Decimal("100")
+    assert result.average_execution_price is None
+    assert result.last_execution_price is None
+
+    assert result.slippage() is None
+    assert result.slippage_pct() is None
+    assert result.price_impact() is None
+    assert result.price_impact_pct() is None
