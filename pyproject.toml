@@ -3,7 +3,9 @@ name = "bisq-market-intelligence"
 version = "0.1.0"
 description = "Market data and execution analytics for Bisq markets"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "requests",
+]
 
 [project.optional-dependencies]
 dev = [
