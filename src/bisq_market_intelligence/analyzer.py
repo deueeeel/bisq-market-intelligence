@@ -220,3 +220,12 @@ class MarketAnalyzer:
             side=side,
         )
 
+    def execution_curve(
+        self,
+        amounts: list[Decimal],
+        side: str,
+    ) -> list[ExecutionResult]:
+        return [
+            self.simulate_execution(amount, side)
+            for amount in amounts
+        ]

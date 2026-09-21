@@ -395,3 +395,67 @@ def test_no_execution_returns_none_for_all_execution_metrics():
     assert result.slippage_pct() is None
     assert result.price_impact() is None
     assert result.price_impact_pct() is None
+
+
+def test_execution_curve_returns_results_in_order_for_valid_amounts():
+    offers = [
+        make_offer("sell-1", "SELL", "100000", "0.20"),
+        make_offer("sell-2", "SELL", "100200", "0.20"),
+        make_offer("sell-3", "SELL", "100500", "0.20"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+    results = analyzer.execution_curve(
+        [Decimal("0.10"), Decimal("0.30"), Decimal("0.60")],
+        "BUY",
+    )
+
+    assert len(results) == 3
+
+    assert results[0].requested_amount == Decimal("0.10")
+    assert results[0].executed_amount == Decimal("0.10")
+    assert results[0].average_execution_price == Decimal("100000")
+
+    assert results[1].requested_amount == Decimal("0.30")
+    assert results[1].executed_amount == Decimal("0.30")
+
+    assert results[2].requested_amount == Decimal("0.60")
+    assert results[2].executed_amount == Decimal("0.60")
+    assert results[2].last_execution_price == Decimal("100500")
+
+
+def test_execution_curve_returns_empty_list_for_empty_amounts():
+    offers = [
+        make_offer("sell-1", "SELL", "100000", "0.20"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+    results = analyzer.execution_curve([], "BUY")
+
+    assert results == []
+
+
+def test_execution_curve_raises_and_aborts_on_invalid_amount():
+    offers = [
+        make_offer("sell-1", "SELL", "100000", "0.20"),
+        make_offer("sell-2", "SELL", "100200", "0.20"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    with pytest.raises(ValueError, match="amount must be"):
+        analyzer.execution_curve(
+            [Decimal("0.10"), Decimal("-1"), Decimal("0.20")],
+            "BUY",
+        )
+
+
+def test_execution_curve_raises_on_invalid_side():
+    offers = [
+        make_offer("sell-1", "SELL", "100000", "0.20"),
+    ]
+
+    analyzer = MarketAnalyzer(offers)
+
+    with pytest.raises(ValueError, match="side must be"):
+        analyzer.execution_curve([Decimal("0.10")], "HOLD")
